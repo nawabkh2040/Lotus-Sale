@@ -3,6 +3,9 @@ Author: Nawab Khan
 GitHub: [https://github.com/nawabkh2040](https://github.com/nawabkh2040)
 
 ---
+🌐 Live Demo: [http://lotuselectronics.com:8001](http://lotuselectronics.com:8001/)
+---
+
 
 # Agentic AI for E-Commerce
 
