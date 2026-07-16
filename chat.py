@@ -1,6 +1,10 @@
 import os
 import uuid
 import re
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from langgraph.checkpoint.memory import InMemorySaver
 from collections import deque
 from datetime import datetime, timedelta
@@ -18,7 +22,7 @@ from langgraph.graph.message import add_messages
 
 
 tavily_api_key = os.getenv("TAVILY_API_KEY","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")
-google_api_key = os.getenv("GOOGLE_API_KEY")
+google_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 from typing import Annotated,Sequence, TypedDict
 
@@ -338,7 +342,7 @@ REMEMBER: Return ONLY the JSON structure above. NO additional text, NO markdown 
 
 # Create LLM class
 llm = ChatGoogleGenerativeAI(
-    model= "gemini-2.5-flash",
+    model= "gemini-3.5-flash",
     temperature=0.7,
     max_retries=2,
     google_api_key=google_api_key,
@@ -620,8 +624,15 @@ def chat_with_agent(message: str, session_id: str = "default_session") -> str:
                 if hasattr(last_message, 'content') and hasattr(last_message, 'type'):
                     # Accept AI responses as final (tools now feed data to LLM for processing)
                     if last_message.type == 'ai' and last_message.content:
-                        print(f"🤖 Got AI response: {len(last_message.content)} chars")
-                        final_response = last_message.content
+                        content = last_message.content
+                        # Gemini can return content as a list of parts instead of a string
+                        if isinstance(content, list):
+                            content = "".join(
+                                part.get("text", "") if isinstance(part, dict) else str(part)
+                                for part in content
+                            )
+                        print(f"🤖 Got AI response: {len(content)} chars")
+                        final_response = content
                         # Don't break here - let the conversation continue if there are more tool calls
         
         # Clean and validate the response

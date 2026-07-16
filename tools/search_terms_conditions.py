@@ -66,7 +66,7 @@ class TermsConditionsSearchTool:
             if self.use_llm_refinement:
                 google_api_key = os.getenv("GOOGLE_API_KEY", "AIzaSyAvGjCSwrbYHCphNJrBI2JHOc1Ga_2SP-k")
                 self.llm = ChatGoogleGenerativeAI(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.5-flash",
                     temperature=0.1,  # Lower temperature for faster response
                     google_api_key=google_api_key
                 )
