@@ -205,6 +205,13 @@ class ProductSearchTool:
                 "features": features[:4]
             })
         
+        # Cache shown products so comparison works for these real inventory ids
+        try:
+            import catalog
+            catalog.remember_products(products)
+        except Exception as cache_err:
+            print(f"⚠️  Failed to cache search products: {cache_err}")
+
         # Return raw product data for LLM to process intelligently
         response = {
             "search_query": query,
@@ -219,7 +226,7 @@ class ProductSearchTool:
                 "has_price_filter": price_min is not None or price_max is not None
             }
         }
-        
+
         return json.dumps(response, ensure_ascii=False, indent=2, separators=(',', ': '))
 
 # Initialize the product search tool instance

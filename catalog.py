@@ -237,6 +237,47 @@ _CATALOG: List[Dict[str, Any]] = [
 # Fast lookup by id
 _BY_ID: Dict[str, Dict[str, Any]] = {p["product_id"]: p for p in _CATALOG}
 
+# Runtime cache of products the user has actually been shown (from live search /
+# browse), so comparison works for real inventory ids that aren't in the static
+# catalog. Keyed by normalized product_id.
+_SEEN: Dict[str, Dict[str, Any]] = {}
+
+
+def _parse_price_str(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    import re
+    digits = re.sub(r"[^\d]", "", str(value))
+    return int(digits) if digits else None
+
+
+def remember_products(products: Any) -> None:
+    """Cache a list of shown product dicts for later comparison/lookup."""
+    if not isinstance(products, list):
+        return
+    for p in products:
+        if not isinstance(p, dict):
+            continue
+        pid = p.get("product_id") or p.get("id")
+        if not pid:
+            continue
+        name = p.get("product_name") or p.get("name") or "Product"
+        _SEEN[_norm_id(pid)] = {
+            "product_name": name,
+            "brand": name.split()[0] if name else "Product",
+            "price": _parse_price_str(p.get("product_mrp") or p.get("price")),
+            "image": p.get("product_image") or p.get("image") or "",
+            "specs": {},
+            "features": p.get("features") or [],
+        }
+
+
+def get_seen(product_id: Any) -> Optional[Dict[str, Any]]:
+    """Return a previously-shown product record by id, or None."""
+    return _SEEN.get(_norm_id(product_id))
+
 
 def _fmt_price(price: int) -> str:
     return f"₹{price:,.0f}"
@@ -254,9 +295,19 @@ def _public_view(p: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _norm_id(product_id: Any) -> str:
+    """Normalize an id to a plain string, tolerating floats like 39721.0."""
+    if isinstance(product_id, float):
+        return str(int(product_id))
+    s = str(product_id).strip()
+    if s.endswith(".0") and s[:-2].isdigit():
+        s = s[:-2]
+    return s
+
+
 def get_product(product_id: Any) -> Optional[Dict[str, Any]]:
     """Return the raw catalog record for an id, or None."""
-    return _BY_ID.get(str(product_id))
+    return _BY_ID.get(_norm_id(product_id))
 
 
 def get_product_view(product_id: Any) -> Optional[Dict[str, Any]]:
@@ -341,48 +392,78 @@ def recommend(
     return [_public_view(p) for p in pool[:limit]]
 
 
-def compare(id_a: Any, id_b: Any) -> Dict[str, Any]:
-    """Build a spec-by-spec comparison of two products.
+def build_comparison(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a spec-by-spec comparison from two normalized product records.
 
-    Returns a dict with name/vs_name, a human-readable `differences` list, a
-    `spec_table` (rows of {feature, a, b}) and a simple `verdict`. Falls back
-    gracefully when an id is unknown.
+    Each record needs: product_name, brand, price (int or None), image, specs(dict).
+    Returns name/vs_name, a human-readable `differences` list, a `spec_table`
+    (rows of {feature, a, b}) and a simple `verdict`.
     """
-    a = get_product(id_a)
-    b = get_product(id_b)
-    if not a or not b:
-        missing = id_a if not a else id_b
-        return {"error": f"Product {missing} is not in our catalog for comparison."}
-
-    keys: List[str] = list(a["specs"].keys())
-    for k in b["specs"]:
+    a_specs = a.get("specs") or {}
+    b_specs = b.get("specs") or {}
+    keys: List[str] = list(a_specs.keys())
+    for k in b_specs:
         if k not in keys:
             keys.append(k)
 
     spec_table = []
     differences = []
-    spec_table.append({"feature": "Price", "a": _fmt_price(a["price"]), "b": _fmt_price(b["price"])})
+    price_a = a.get("price")
+    price_b = b.get("price")
+    spec_table.append({
+        "feature": "Price",
+        "a": _fmt_price(price_a) if price_a else "-",
+        "b": _fmt_price(price_b) if price_b else "-",
+    })
     for k in keys:
-        av = a["specs"].get(k, "-")
-        bv = b["specs"].get(k, "-")
+        av = a_specs.get(k, "-")
+        bv = b_specs.get(k, "-")
         spec_table.append({"feature": k, "a": av, "b": bv})
-        if av != bv and av != "-" and bv != "-":
-            differences.append(f"{k}: {a['brand']} has {av} vs {b['brand']} {bv}")
+        if av != bv and av not in ("-", "", None) and bv not in ("-", "", None):
+            differences.append(
+                f"{k}: {a.get('brand', 'Option A')} has {av} vs "
+                f"{b.get('brand', 'Option B')} {bv}"
+            )
 
-    cheaper = a if a["price"] <= b["price"] else b
-    verdict = (
-        f"{cheaper['product_name']} is the more budget-friendly option at "
-        f"{_fmt_price(cheaper['price'])}."
-    )
+    # When structured specs are thin, fall back to price + feature highlights so
+    # the comparison is still informative for real search-result products.
+    if price_a and price_b and price_a != price_b:
+        diff = abs(price_a - price_b)
+        cheaper_name = a["product_name"] if price_a < price_b else b["product_name"]
+        differences.insert(0, f"Price: {cheaper_name} is {_fmt_price(diff)} cheaper.")
+    a_feats = a.get("features") or []
+    b_feats = b.get("features") or []
+    if not a_specs and a_feats:
+        differences.append(f"{a.get('brand', 'Option A')} highlights: {', '.join(a_feats[:3])}")
+    if not b_specs and b_feats:
+        differences.append(f"{b.get('brand', 'Option B')} highlights: {', '.join(b_feats[:3])}")
+
+    verdict = "Both products are strong choices — pick based on the features you value most."
+    if price_a and price_b:
+        cheaper = a if price_a <= price_b else b
+        verdict = (
+            f"{cheaper['product_name']} is the more budget-friendly option at "
+            f"{_fmt_price(cheaper['price'])}."
+        )
 
     return {
-        "name": a["product_name"],
-        "vs_name": b["product_name"],
-        "price_a": _fmt_price(a["price"]),
-        "price_b": _fmt_price(b["price"]),
-        "image_a": a["image"],
-        "image_b": b["image"],
+        "name": a.get("product_name", "Product A"),
+        "vs_name": b.get("product_name", "Product B"),
+        "price_a": _fmt_price(price_a) if price_a else "-",
+        "price_b": _fmt_price(price_b) if price_b else "-",
+        "image_a": a.get("image", ""),
+        "image_b": b.get("image", ""),
         "differences": differences or ["Both products share very similar specifications."],
         "spec_table": spec_table,
         "verdict": verdict,
     }
+
+
+def compare(id_a: Any, id_b: Any) -> Dict[str, Any]:
+    """Compare two catalog products by id (falls back with a clear error)."""
+    a = get_product(id_a)
+    b = get_product(id_b)
+    if not a or not b:
+        missing = id_a if not a else id_b
+        return {"error": f"Product {missing} is not in our catalog for comparison."}
+    return build_comparison(a, b)

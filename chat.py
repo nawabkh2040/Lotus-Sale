@@ -268,10 +268,13 @@ TOOL USAGE RULES:
    - Cancellation policy ("cancel", "cancellation")
    - Shipping/delivery terms ("shipping policy", "delivery terms")
 5. Use compare_products when the user wants to COMPARE two products ("compare", "vs",
-   "difference between", "which is better"). Extract BOTH product_ids from the
-   previous search results and pass them as a list. Put the tool result in the
-   "comparison" field (as a one-item array) and write a short conversational summary
-   in "answer".
+   "difference between", "which is better", "compare last two"). Extract BOTH
+   product_ids from the previous search results and pass them together as a list in
+   ONE single call, e.g. compare_products(product_ids=[40097, 39721]). This tool
+   fetches all the details itself — DO NOT call get_filtered_product_details to
+   gather specs for a comparison, and NEVER call tools repeatedly for each product.
+   Put the tool result in the "comparison" field (as a one-item array) and write a
+   short conversational summary in "answer".
 6. Use recommend_products when the user asks for SUGGESTIONS or ALTERNATIVES
    ("recommend", "suggest", "what else", "alternatives", "something similar",
    "best phone under 20000"). Pass a category and/or budget, or based_on_product_id.
@@ -423,6 +426,10 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.7,
     max_retries=2,
     google_api_key=google_api_key,
+    # Disable "thinking" so Gemini stops attaching large thought-signature blobs
+    # to messages. Those get stored in history and re-sent, wasting tokens.
+    thinking_budget=0,
+    include_thoughts=False,
 )
 
 # Bind tools to the model
@@ -463,6 +470,27 @@ def call_tool(state: AgentState):
     
     print(f"🎯 Returning {len(outputs)} tool message(s)")
     return {"messages": outputs}
+
+
+def _strip_signature(message) -> None:
+    """Remove Gemini thought-signature blobs from a message in place.
+
+    Thinking is disabled, so these are never needed on later turns; dropping them
+    keeps stored/re-sent history lean on tokens.
+    """
+    try:
+        ak = getattr(message, "additional_kwargs", None)
+        if isinstance(ak, dict):
+            ak.pop("signature", None)
+        content = getattr(message, "content", None)
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict):
+                    part.pop("extras", None)
+                    part.pop("signature", None)
+    except Exception:
+        pass
+
 
 def call_model(
     state: AgentState,
@@ -521,10 +549,13 @@ def call_model(
                 content_preview = response.content[:100] + "..." if len(response.content) > 100 else response.content
                 print(f"📝 Response content preview: {content_preview}")
         
+        # Drop any residual thought-signature so it isn't stored/re-sent (tokens)
+        _strip_signature(response)
+
         # Save the new response to Redis (only HumanMessage and AIMessage)
         if hasattr(response, 'type') and response.type == 'ai':
             redis_memory.add_message_to_user(user_id, response)
-        
+
         # We return a list, because this will get added to the existing messages state using the add_messages reducer
         return {"messages": [response]}
         
@@ -689,36 +720,52 @@ def _run_agent(message: str, session_id: str = "default_session") -> str:
             "number_of_steps": 0
         }
         
-        # Configure checkpointing with thread ID based on session
-        config = {"configurable": {"thread_id": session_id}}
-        
+        # Configure checkpointing with thread ID based on session.
+        # recursion_limit caps how many graph steps run before LangGraph stops,
+        # a hard guard against tool-call loops.
+        config = {
+            "configurable": {"thread_id": session_id},
+            "recursion_limit": 25,
+        }
+
         # Process through the graph
         final_response = None
+        last_tool_result = None
         response_count = 0
-        max_iterations = 15  # Prevent infinite loops
-        
-        for state in graph.stream(inputs, config=config, stream_mode="values"):
-            response_count += 1
-            if response_count > max_iterations:
-                break
-                
-            # Get the last message from the final state
-            if "messages" in state and state["messages"]:
-                last_message = state["messages"][-1]
-                if hasattr(last_message, 'content') and hasattr(last_message, 'type'):
-                    # Accept AI responses as final (tools now feed data to LLM for processing)
-                    if last_message.type == 'ai' and last_message.content:
-                        content = last_message.content
-                        # Gemini can return content as a list of parts instead of a string
-                        if isinstance(content, list):
-                            content = "".join(
-                                part.get("text", "") if isinstance(part, dict) else str(part)
-                                for part in content
-                            )
-                        print(f"🤖 Got AI response: {len(content)} chars")
-                        final_response = content
-                        # Don't break here - let the conversation continue if there are more tool calls
-        
+        max_iterations = 20  # Prevent infinite loops
+
+        try:
+            for state in graph.stream(inputs, config=config, stream_mode="values"):
+                response_count += 1
+                if response_count > max_iterations:
+                    print("⚠️  Max iterations reached - stopping graph stream")
+                    break
+
+                # Get the last message from the final state
+                if "messages" in state and state["messages"]:
+                    last_message = state["messages"][-1]
+                    msg_type = getattr(last_message, "type", None)
+                    # Remember the most recent tool output for fallback recovery
+                    if msg_type == "tool" and getattr(last_message, "content", None):
+                        last_tool_result = last_message.content
+                    if hasattr(last_message, 'content') and msg_type is not None:
+                        # Accept AI responses as final (tools feed data to LLM)
+                        if msg_type == 'ai' and last_message.content:
+                            content = last_message.content
+                            # Gemini can return content as a list of parts
+                            if isinstance(content, list):
+                                content = "".join(
+                                    part.get("text", "") if isinstance(part, dict) else str(part)
+                                    for part in content
+                                )
+                            if content and content.strip():
+                                print(f"🤖 Got AI response: {len(content)} chars")
+                                final_response = content
+                                # Don't break - allow further tool calls to refine
+        except Exception as stream_err:
+            # e.g. GraphRecursionError from a tool loop — degrade gracefully
+            print(f"⚠️  Graph stream stopped early: {type(stream_err).__name__}: {stream_err}")
+
         # Clean and validate the response
         if final_response:
             # Clean the response from any markdown formatting
@@ -861,16 +908,46 @@ def _run_agent(message: str, session_id: str = "default_session") -> str:
                 
                 return json.dumps(fallback_response, ensure_ascii=False, indent=2)
         else:
-            # Default response if no content
-            error_response = {
-                "answer": "I apologize, but I couldn't process your request at the moment. Please try again or contact our support team.",
+            # No final AI text (e.g. the model looped on tool calls). Try to
+            # recover something useful from the last tool result before giving up.
+            recovery = {
+                "answer": "Here's what I found for you.",
                 "products": [],
                 "product_details": {},
                 "stores": [],
                 "policy_info": {},
-                "end": "How else can I assist you with Lotus Electronics products today?"
+                "comparison": [],
+                "recommendations": [],
+                "order": {},
+                "end": "Is there anything else I can help you with?"
             }
-            return json.dumps(error_response, ensure_ascii=False, indent=2)
+            recovered = False
+            tool_data = last_tool_result
+            if isinstance(tool_data, str):
+                try:
+                    tool_data = json.loads(tool_data)
+                except Exception:
+                    tool_data = None
+            if isinstance(tool_data, dict) and not tool_data.get("error"):
+                if tool_data.get("spec_table"):
+                    recovery["comparison"] = [tool_data]
+                    recovery["answer"] = "Here's a side-by-side comparison of the two products."
+                    recovered = True
+                elif tool_data.get("order_id"):
+                    recovery["order"] = tool_data
+                    recovery["answer"] = "Here are your order details."
+                    recovered = True
+            elif isinstance(tool_data, list) and tool_data:
+                recovery["products"] = tool_data
+                recovery["answer"] = "Here are some products that match your request."
+                recovered = True
+
+            if not recovered:
+                recovery["answer"] = (
+                    "I had a little trouble putting that together. Could you rephrase "
+                    "or tell me the specific products you'd like to compare or view?"
+                )
+            return json.dumps(recovery, ensure_ascii=False, indent=2)
             
     except Exception as e:
         print(f"❌ Error in chat_with_agent: {type(e).__name__}: {str(e)}")
