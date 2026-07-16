@@ -1,6 +1,7 @@
 :root {
-    --brand: #7b1fa2;
-    --brand-2: #9c27b0;
+    /* Base brand color — matches the chat widget (teal) */
+    --brand: #20b2aa;
+    --brand-2: #1a9b94;
     --bg: #f4f5fb;
     --card: #ffffff;
     --text: #1f2330;
@@ -24,7 +25,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #7b1fa2, #4a148c);
+    background: linear-gradient(135deg, #20b2aa, #12726c);
     padding: 20px;
 }
 .login-card {
@@ -68,7 +69,7 @@ body {
     cursor: pointer;
     transition: transform .1s ease, box-shadow .2s ease;
 }
-.login-card button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(123, 31, 162, .35); }
+.login-card button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(32, 178, 170, .35); }
 .login-error {
     background: #fdecef; color: #c62828;
     padding: 10px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
@@ -159,8 +160,8 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 12px 18px; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; position: sticky; top: 0; background: #fbfbfe; }
 tbody tr { cursor: pointer; transition: background .12s ease; }
-tbody tr:hover { background: #faf6fd; }
-tbody tr.active { background: #f3e5f9; }
+tbody tr:hover { background: #f0fbfa; }
+tbody tr.active { background: #e2f6f4; }
 .sess-id { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 
 .muted { color: var(--muted); }

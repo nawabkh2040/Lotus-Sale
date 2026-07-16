@@ -209,6 +209,7 @@ from tools.search_terms_conditions import search_terms_conditions
 # Compare, recommend and order tools (backed by the local catalog + SQLite store)
 from tools.compare_products import compare_products_tool
 from tools.recommend_products import recommend_products_tool
+from tools.browse_catalog import browse_catalog_tool
 from tools.order_tools import place_order_tool, track_order_tool, set_current_session
 
 # SQLite persistence for chat logs, sessions and orders
@@ -227,6 +228,7 @@ tools = [
     search_terms_conditions,
     compare_products_tool,
     recommend_products_tool,
+    browse_catalog_tool,
     place_order_tool,
     track_order_tool,
 ]
@@ -280,7 +282,11 @@ TOOL USAGE RULES:
 8. Use track_order when the user wants the STATUS of an order ("track my order",
    "where is my order", "order status") and gives an order id like LOTUS1001. Put
    the returned order object in the "order" field.
-9. DON'T use tools when discussing general product info that doesn't need specific details
+9. Use browse_catalog to show products from our in-store catalog when the user wants
+   to browse a category (e.g. "show me phones", "what TVs do you have") or as a
+   FALLBACK whenever search_products returns no results. Pass a category and/or
+   budget, and put the returned items in the "products" field.
+10. DON'T use tools when discussing general product info that doesn't need specific details
 
 IMPORTANT POLICY RESPONSE RULE:
 When using search_terms_conditions, DO NOT put raw policy sections in policy_info field. Instead:

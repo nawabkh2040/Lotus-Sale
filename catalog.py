@@ -273,6 +273,45 @@ def find_by_category(category: str, budget: Optional[float] = None) -> List[Dict
     return matches
 
 
+# Map common user words to catalog categories
+_CATEGORY_ALIASES = {
+    "phone": "smartphone", "smartphone": "smartphone", "mobile": "smartphone",
+    "tv": "television", "television": "television", "led": "television",
+    "laptop": "laptop", "notebook": "laptop", "computer": "laptop",
+    "ac": "ac", "air conditioner": "ac", "airconditioner": "ac",
+    "audio": "audio", "earbuds": "audio", "earphone": "audio",
+    "headphone": "audio", "speaker": "audio",
+}
+
+
+def resolve_category(text: Optional[str]) -> Optional[str]:
+    """Map a free-text term to a known catalog category, if possible."""
+    if not text:
+        return None
+    t = text.lower().strip()
+    if t in _CATEGORY_ALIASES:
+        return _CATEGORY_ALIASES[t]
+    for word, cat in _CATEGORY_ALIASES.items():
+        if word in t:
+            return cat
+    return None
+
+
+def browse(
+    category: Optional[str] = None,
+    budget: Optional[float] = None,
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    """Return frontend-facing products from the catalog, optionally filtered."""
+    cat = resolve_category(category) if category else None
+    if cat:
+        pool = find_by_category(cat, budget)
+    else:
+        pool = [p for p in _CATALOG if (budget is None or p["price"] <= float(budget))]
+    pool = sorted(pool, key=lambda p: p["price"])
+    return [_public_view(p) for p in pool[:limit]]
+
+
 def recommend(
     based_on_id: Optional[Any] = None,
     category: Optional[str] = None,
