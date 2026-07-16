@@ -1,8 +1,16 @@
+import os
 import requests
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 from typing import Optional
 from langchain_core.tools import tool
+
+# Lotus portal auth token expires periodically. Set LOTUS_AUTH_TOKEN in .env to
+# refresh it without editing code; the literal below is only a fallback.
+LOTUS_AUTH_TOKEN = os.getenv(
+    "LOTUS_AUTH_TOKEN",
+    "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiNzA5MDQiLCJpYXQiOjE3NTQzNzg3MjQsImV4cCI6MTc1NDM5NjcyNH0.inays4iDucXwb_ktjjDur4yKdnjXGeIBTn978jtaFto",
+)
 class ProductDetailInput(BaseModel):
     product_id: int = Field(..., description="ID of the product to fetch details for")
     city: Optional[str] = Field("INDORE", description="City name (optional, defaults to INDORE)")
@@ -30,7 +38,7 @@ def get_filtered_product_details_tool(product_id: int, city: str = "INDORE") -> 
 
     headers = {
         "auth-key": "Web2@!9",
-        "auth-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiNzA5MDQiLCJpYXQiOjE3NTQzNzg3MjQsImV4cCI6MTc1NDM5NjcyNH0.inays4iDucXwb_ktjjDur4yKdnjXGeIBTn978jtaFto",
+        "auth-token": LOTUS_AUTH_TOKEN,
         "end-client": "Lotus-Web",
     }
 
@@ -43,7 +51,14 @@ def get_filtered_product_details_tool(product_id: int, city: str = "INDORE") -> 
         response = requests.post(url, headers=headers, data=data)
         response.raise_for_status()
 
-        product_detail = response.json().get("data", {}).get("product_detail", {})
+        payload = response.json()
+        # On an expired/invalid token or missing product the API returns
+        # {"data": "", "error": "1", ...} — data is a string, not a dict.
+        data_field = payload.get("data")
+        if not isinstance(data_field, dict):
+            return {"error": payload.get("message", "Product details unavailable.")}
+
+        product_detail = data_field.get("product_detail", {})
         if not product_detail:
             return {"error": "Product not found."}
 
