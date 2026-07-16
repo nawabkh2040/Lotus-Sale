@@ -258,7 +258,9 @@ You MUST respond with EXACTLY this JSON structure - NO nested JSON strings, NO e
 TOOL USAGE RULES:
 1. Use search_products ONLY when user asks for NEW products they haven't seen yet
 2. Use get_near_store ONLY when user asks about store locations by city or zipcode
-3. Use get_filtered_product_details_tool when user wants MORE DETAILS about a specific product from previous results (extract product_id from conversation context)
+3. Use get_filtered_product_details_tool ONLY when the user wants MORE DETAILS about
+   ONE specific product from previous results (extract product_id from context). NEVER
+   use it to gather specs for a comparison — use compare_products for that instead.
 4. Use search_terms_conditions when user asks about:
    - Return policy ("return", "return it", "want to return")
    - Refund policy ("refund", "money back", "refund conditions")
