@@ -16,6 +16,44 @@ class ProductDetailInput(BaseModel):
     city: Optional[str] = Field("INDORE", description="City name (optional, defaults to INDORE)")
 
 
+def _fallback_details(product_id: Any) -> Optional[Dict[str, Any]]:
+    """Return details from the local catalog / seen-products cache.
+
+    Used when the live API can't find a product, so this tool never dead-ends on
+    a product the customer has already been shown.
+    """
+    try:
+        import catalog
+        rec = catalog.get_product(product_id) or catalog.get_seen(product_id)
+    except Exception:
+        rec = None
+    if not rec:
+        return None
+
+    specs = rec.get("specs") or {}
+    spec_list = [{"fkey": k, "fvalue": v} for k, v in specs.items()]
+    if not spec_list and rec.get("features"):
+        spec_list = [{"fkey": "Highlight", "fvalue": f} for f in rec["features"]]
+
+    price = rec.get("price")
+    if isinstance(price, (int, float)):
+        mrp = f"₹{price:,.0f}"
+    else:
+        mrp = rec.get("product_mrp") or ""
+
+    return {
+        "product_id": str(product_id),
+        "product_name": rec.get("product_name"),
+        "product_mrp": mrp,
+        "product_image": rec.get("image", ""),
+        "instock": "Yes",
+        "product_specification": spec_list,
+        "meta_desc": "",
+        "del": {},
+        "source": "catalog",
+    }
+
+
 
 @tool("get_filtered_product_details", args_schema=ProductDetailInput, return_direct=False)
 def get_filtered_product_details_tool(product_id: int, city: str = "INDORE") -> Dict[str, Any]:
@@ -55,12 +93,11 @@ def get_filtered_product_details_tool(product_id: int, city: str = "INDORE") -> 
         # On an expired/invalid token or missing product the API returns
         # {"data": "", "error": "1", ...} — data is a string, not a dict.
         data_field = payload.get("data")
-        if not isinstance(data_field, dict):
-            return {"error": payload.get("message", "Product details unavailable.")}
-
-        product_detail = data_field.get("product_detail", {})
+        product_detail = data_field.get("product_detail", {}) if isinstance(data_field, dict) else {}
         if not product_detail:
-            return {"error": "Product not found."}
+            # Live API had nothing — fall back to what we already know locally
+            fallback = _fallback_details(product_id)
+            return fallback if fallback else {"error": "Product not found."}
 
         return {
             "product_id": product_detail.get("product_id"),
@@ -75,10 +112,12 @@ def get_filtered_product_details_tool(product_id: int, city: str = "INDORE") -> 
             "del": product_detail.get("del"),
         }
 
-    except requests.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
+    except requests.RequestException:
+        fallback = _fallback_details(product_id)
+        return fallback if fallback else {"error": "Product details are temporarily unavailable."}
     except ValueError:
-        return {"error": "Failed to parse JSON."}
+        fallback = _fallback_details(product_id)
+        return fallback if fallback else {"error": "Failed to parse product details."}
 
 # Example usage (commented out to prevent execution on import)
 # response = get_filtered_product_details_tool.invoke({
