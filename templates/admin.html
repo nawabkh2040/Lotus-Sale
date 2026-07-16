@@ -48,11 +48,16 @@
                 <div class="stat-icon orange"><i class="fas fa-box"></i></div>
                 <div><div class="stat-value" id="statOrders">–</div><div class="stat-label">Orders</div></div>
             </div>
+            <div class="stat-card">
+                <div class="stat-icon red"><i class="fas fa-headset"></i></div>
+                <div><div class="stat-value" id="statTickets">–</div><div class="stat-label">Tickets</div></div>
+            </div>
         </section>
 
         <div class="tabs">
             <button class="tab active" data-tab="sessions"><i class="fas fa-comments"></i> Sessions &amp; Chats</button>
             <button class="tab" data-tab="orders"><i class="fas fa-box"></i> Orders</button>
+            <button class="tab" data-tab="tickets"><i class="fas fa-headset"></i> Tickets</button>
         </div>
 
         <!-- Sessions view -->
@@ -82,6 +87,19 @@
                     <table>
                         <thead><tr><th>Order ID</th><th>Product</th><th>Amount</th><th>Status</th><th>Ordered</th><th>Expected</th></tr></thead>
                         <tbody id="ordersBody"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tickets view -->
+        <section id="tab-tickets" style="display:none">
+            <div class="card">
+                <div class="card-head"><i class="fas fa-headset"></i> Support Tickets</div>
+                <div class="table-scroll">
+                    <table>
+                        <thead><tr><th>Ticket ID</th><th>Name</th><th>Phone</th><th>Issue</th><th>Status</th><th>Raised</th></tr></thead>
+                        <tbody id="ticketsBody"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
                     </table>
                 </div>
             </div>

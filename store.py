@@ -61,6 +61,16 @@ def init_db() -> None:
                     expected_delivery TEXT,
                     timeline_json     TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS tickets (
+                    ticket_id   TEXT PRIMARY KEY,
+                    session_id  TEXT,
+                    name        TEXT,
+                    phone       TEXT,
+                    issue       TEXT,
+                    status      TEXT,
+                    created_at  TEXT
+                );
                 """
             )
     except Exception as e:  # pragma: no cover - defensive
@@ -129,10 +139,11 @@ def get_stats() -> Dict[str, int]:
             sessions = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
             messages = conn.execute("SELECT COUNT(*) FROM chat_logs").fetchone()[0]
             orders = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
-            return {"sessions": sessions, "messages": messages, "orders": orders}
+            tickets = conn.execute("SELECT COUNT(*) FROM tickets").fetchone()[0]
+            return {"sessions": sessions, "messages": messages, "orders": orders, "tickets": tickets}
     except Exception as e:  # pragma: no cover - defensive
         print(f"❌ store.get_stats failed: {type(e).__name__}: {e}")
-        return {"sessions": 0, "messages": 0, "orders": 0}
+        return {"sessions": 0, "messages": 0, "orders": 0, "tickets": 0}
 
 
 # --------------------------------------------------------------------------- #
@@ -273,3 +284,44 @@ def seed_orders() -> None:
                 )
         except Exception as e:  # pragma: no cover - defensive
             print(f"❌ store.seed_orders insert failed: {type(e).__name__}: {e}")
+
+
+# --------------------------------------------------------------------------- #
+# Support tickets
+# --------------------------------------------------------------------------- #
+def create_ticket(session_id: Optional[str], name: str, phone: str, issue: str) -> Dict[str, Any]:
+    """Create a support ticket and return it."""
+    ticket_id = "TCKT" + str(random.randint(10000, 99999))
+    created = datetime.utcnow()
+    record = {
+        "ticket_id": ticket_id,
+        "session_id": session_id,
+        "name": (name or "").strip(),
+        "phone": (phone or "").strip(),
+        "issue": (issue or "").strip(),
+        "status": "Open",
+        "created_at": created.isoformat(),
+    }
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "INSERT INTO tickets (ticket_id, session_id, name, phone, issue, "
+                "status, created_at) VALUES (:ticket_id, :session_id, :name, :phone, "
+                ":issue, :status, :created_at)",
+                record,
+            )
+    except Exception as e:  # pragma: no cover - defensive
+        print(f"❌ store.create_ticket failed: {type(e).__name__}: {e}")
+    out = dict(record)
+    out["created_date"] = created.strftime("%d %b %Y, %I:%M %p")
+    return out
+
+
+def get_tickets() -> List[Dict[str, Any]]:
+    try:
+        with _connect() as conn:
+            rows = conn.execute("SELECT * FROM tickets ORDER BY rowid DESC").fetchall()
+            return [dict(r) for r in rows]
+    except Exception as e:  # pragma: no cover - defensive
+        print(f"❌ store.get_tickets failed: {type(e).__name__}: {e}")
+        return []

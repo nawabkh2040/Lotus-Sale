@@ -211,6 +211,7 @@ from tools.compare_products import compare_products_tool
 from tools.recommend_products import recommend_products_tool
 from tools.browse_catalog import browse_catalog_tool
 from tools.order_tools import place_order_tool, track_order_tool, set_current_session
+from tools.ticket_tools import raise_ticket_tool
 
 # SQLite persistence for chat logs, sessions and orders
 import store
@@ -231,6 +232,7 @@ tools = [
     browse_catalog_tool,
     place_order_tool,
     track_order_tool,
+    raise_ticket_tool,
 ]
 
 from datetime import datetime
@@ -252,6 +254,7 @@ You MUST respond with EXACTLY this JSON structure - NO nested JSON strings, NO e
   "comparison": [comparison object if compare_products was used],
   "recommendations": [array of product objects if recommend_products was used],
   "order": {order object if place_order or track_order was used},
+  "ticket": {ticket object if raise_ticket was used},
   "end": "follow-up question to continue conversation"
 }
 
@@ -291,7 +294,19 @@ TOOL USAGE RULES:
    to browse a category (e.g. "show me phones", "what TVs do you have") or as a
    FALLBACK whenever search_products returns no results. Pass a category and/or
    budget, and put the returned items in the "products" field.
-10. DON'T use tools when discussing general product info that doesn't need specific details
+10. SUPPORT TICKETS — when a customer reports a PROBLEM, complaint or issue (e.g.
+    "my product is defective", "order not delivered", "I have a complaint",
+    "something is broken", "I need help with an issue"):
+    a) FIRST try to genuinely help — answer their question or suggest a solution.
+    b) THEN offer: "If you'd like, I can raise a support ticket so our team follows
+       up with you. Would you like me to do that?"
+    c) If they agree, collect these ONE or two at a time (don't overwhelm): their
+       NAME, PHONE NUMBER, and a short description of the ISSUE. Ask only for the
+       details you don't already have from the conversation.
+    d) Once you have all three, call raise_ticket(name, phone, issue). Put the
+       returned ticket object in the "ticket" field and confirm the ticket id warmly.
+    Only call raise_ticket when you actually have name, phone AND issue.
+11. DON'T use tools when discussing general product info that doesn't need specific details
 
 IMPORTANT POLICY RESPONSE RULE:
 When using search_terms_conditions, DO NOT put raw policy sections in policy_info field. Instead:
@@ -395,6 +410,21 @@ When user asks "track my order LOTUS1001":
   "products": [],
   "order": {"order_id": "LOTUS1001", "product_name": "Samsung Galaxy A26 5G", "status": "Delivered", "order_date": "07 Jul 2026", "expected_delivery": "11 Jul 2026", "timeline": [...]},
   "end": "Can I help you with anything else?"
+}
+
+When a user reports an issue (e.g. "my TV screen is flickering"), FIRST help, THEN offer a ticket:
+{
+  "answer": "I'm sorry to hear that. A flickering screen is often fixed by checking the cable connections and updating the TV software. If that doesn't help, I can raise a support ticket so our team follows up with you.",
+  "products": [],
+  "end": "Would you like me to raise a support ticket for this?"
+}
+
+After the user agrees and provides details, once you have name, phone and issue, call raise_ticket and respond:
+{
+  "answer": "Thank you, Rahul! I've raised a support ticket for your flickering TV screen. Our team will reach out to you shortly on the number provided.",
+  "products": [],
+  "ticket": {"ticket_id": "TCKT48210", "name": "Rahul", "phone": "9876543210", "issue": "TV screen flickering", "status": "Open"},
+  "end": "Is there anything else I can help you with in the meantime?"
 }
 
 CRITICAL POLICY_INFO RULES:

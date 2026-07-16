@@ -240,6 +240,12 @@ def admin_orders():
     return jsonify(store.get_orders())
 
 
+@app.route("/admin/api/tickets", methods=["GET"])
+@admin_required
+def admin_tickets():
+    return jsonify(store.get_tickets())
+
+
 if __name__ == "__main__":
     # Load PORT from env or default to 8001
     port = int(os.environ.get("PORT", 8001))

@@ -503,6 +503,29 @@ class ChatBot {
         this.scrollToBottom();
     }
 
+    addTicketCard(ticket) {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'ticket-card fade-in';
+        cardDiv.innerHTML = `
+            <div class="ticket-wrap">
+                <div class="ticket-head">
+                    <span><i class="fas fa-headset"></i> Support Ticket Raised</span>
+                    <span class="ticket-status">${ticket.status || 'Open'}</span>
+                </div>
+                <div class="ticket-id-row">
+                    <i class="fas fa-hashtag"></i> Ticket ID: <strong>${ticket.ticket_id}</strong>
+                </div>
+                <div class="ticket-meta">
+                    ${ticket.name ? `<span><i class="fas fa-user"></i> ${ticket.name}</span>` : ''}
+                    ${ticket.phone ? `<span><i class="fas fa-phone"></i> ${ticket.phone}</span>` : ''}
+                </div>
+                ${ticket.issue ? `<div class="ticket-issue"><i class="fas fa-circle-exclamation"></i> ${ticket.issue}</div>` : ''}
+                <div class="ticket-foot"><i class="fas fa-clock"></i> Our team will get back to you shortly.</div>
+            </div>`;
+        this.chatMessages.appendChild(cardDiv);
+        this.scrollToBottom();
+    }
+
     // addProductCard(product) {
     //     const card = document.createElement('div');
     //     card.className = 'product-card fade-in';
@@ -537,6 +560,7 @@ class ChatBot {
         const comparison = responseData.comparison;
         const recommendations = responseData.recommendations;
         const order = responseData.order;
+        const ticket = responseData.ticket;
         const end = responseData.end;
 
         // If stores are present, clean up the answer to avoid duplication
@@ -608,6 +632,9 @@ class ChatBot {
         }
         if (order && typeof order === 'object' && order.order_id) {
             this.addOrderCard(order);
+        }
+        if (ticket && typeof ticket === 'object' && ticket.ticket_id) {
+            this.addTicketCard(ticket);
         }
         if (end) this.addMessage(end, 'bot');
     }
@@ -839,6 +866,7 @@ class ChatBot {
             ac: "I need an air conditioner. Can you show me your AC collection?",
             recommend: "Can you recommend a good smartphone under 20000?",
             trackorder: "I'd like to track my order LOTUS1001.",
+            raiseticket: "I have an issue and would like to raise a support ticket.",
             storelocator: "I want to find a Lotus Electronics store near me. Can you help?"
         };
 

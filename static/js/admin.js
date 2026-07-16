@@ -37,6 +37,7 @@
             $("statSessions").textContent = s.sessions;
             $("statMessages").textContent = s.messages;
             $("statOrders").textContent = s.orders;
+            if ($("statTickets")) $("statTickets").textContent = s.tickets != null ? s.tickets : 0;
         } catch (e) { console.error(e); }
     }
 
@@ -108,21 +109,46 @@
     }
 
     function initTabs() {
+        const panels = ["sessions", "orders", "tickets"];
         document.querySelectorAll(".tab").forEach(tab => {
             tab.addEventListener("click", () => {
                 document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
                 tab.classList.add("active");
                 const which = tab.dataset.tab;
-                $("tab-sessions").style.display = which === "sessions" ? "" : "none";
-                $("tab-orders").style.display = which === "orders" ? "" : "none";
+                panels.forEach(p => {
+                    const el = $("tab-" + p);
+                    if (el) el.style.display = which === p ? "" : "none";
+                });
             });
         });
+    }
+
+    async function loadTickets() {
+        try {
+            const tickets = await getJSON("/admin/api/tickets");
+            if (!tickets) return;
+            const body = $("ticketsBody");
+            if (!tickets.length) {
+                body.innerHTML = '<tr><td colspan="6" class="muted center">No tickets raised yet.</td></tr>';
+                return;
+            }
+            body.innerHTML = tickets.map(t => `
+                <tr>
+                    <td class="order-id">${esc(t.ticket_id)}</td>
+                    <td>${esc(t.name)}</td>
+                    <td>${esc(t.phone)}</td>
+                    <td>${esc(t.issue)}</td>
+                    <td><span class="badge ${(t.status || '').toLowerCase() === 'open' ? 'processing' : 'delivered'}">${esc(t.status)}</span></td>
+                    <td>${fmtTime(t.created_at)}</td>
+                </tr>`).join("");
+        } catch (e) { console.error(e); }
     }
 
     function refreshAll() {
         loadStats();
         loadSessions();
         loadOrders();
+        loadTickets();
     }
 
     document.addEventListener("DOMContentLoaded", () => {
