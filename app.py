@@ -1,14 +1,39 @@
 # app.py
 
 import os
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from functools import wraps
+from dotenv import load_dotenv
+from flask import (
+    Flask, request, jsonify, render_template, send_from_directory,
+    session, redirect, url_for,
+)
 
+load_dotenv()
 
 # from agenticai_lotus import  LotusElectronicsBot
 # from try_agentic import chat_with_agent
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.secret_key = os.getenv("FLASK_SECRET", "lotus-dev-secret-change-me")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
+# SQLite store for chat logs, sessions and orders
+import store
+store.init_db()
+store.seed_orders()
 # allow all origins; adjust in production as needed
+
+
+def admin_required(view):
+    """Gate admin API/pages behind a simple session login."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("is_admin"):
+            if request.path.startswith("/admin/api"):
+                return jsonify({"error": "unauthorized"}), 401
+            return redirect(url_for("admin"))
+        return view(*args, **kwargs)
+    return wrapped
 
 @app.route("/static")
 def serve_static(path):
@@ -30,16 +55,18 @@ search_tool = ProductSearchTool()
 def health():
     """Health check endpoint"""
     try:
-        # Test Redis connection
-        redis_memory.redis_client.ping()
-        
+        # Redis is optional; FallbackMemory has no redis_client attribute
+        redis_status = "disconnected"
+        if hasattr(redis_memory, "test_connection") and redis_memory.test_connection():
+            redis_status = "connected"
+
         # Check search tool availability
         pinecone_status = "connected" if search_tool.is_available else "disconnected"
-        
+
         return jsonify({
             "status": "healthy",
             "service": "Lotus Electronics Chatbot",
-            "redis": "connected",
+            "redis": redis_status,
             "search_methods": {
                 "pinecone_vector": pinecone_status
             },
@@ -47,7 +74,7 @@ def health():
         })
     except Exception as e:
         return jsonify({
-            "status": "unhealthy", 
+            "status": "unhealthy",
             "error": str(e)
         }), 500
 
@@ -160,6 +187,57 @@ def api_search_only():
             "error": str(e)
         }), 500
 
+
+
+# ----------------------------------------------------------------------------- #
+# Admin portal
+# ----------------------------------------------------------------------------- #
+@app.route("/admin", methods=["GET"])
+def admin():
+    """Render the admin dashboard (or the login screen if not authenticated)."""
+    return render_template("admin.html", logged_in=bool(session.get("is_admin")))
+
+
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    password = (request.form.get("password") or "").strip()
+    if password == ADMIN_PASSWORD:
+        session["is_admin"] = True
+        return redirect(url_for("admin"))
+    return render_template("admin.html", logged_in=False, error="Incorrect password")
+
+
+@app.route("/admin/logout", methods=["GET"])
+def admin_logout():
+    session.pop("is_admin", None)
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/api/stats", methods=["GET"])
+@admin_required
+def admin_stats():
+    return jsonify(store.get_stats())
+
+
+@app.route("/admin/api/sessions", methods=["GET"])
+@admin_required
+def admin_sessions():
+    return jsonify(store.get_sessions())
+
+
+@app.route("/admin/api/sessions/<session_id>", methods=["GET"])
+@admin_required
+def admin_session_detail(session_id):
+    return jsonify({
+        "session_id": session_id,
+        "messages": store.get_chat_logs(session_id),
+    })
+
+
+@app.route("/admin/api/orders", methods=["GET"])
+@admin_required
+def admin_orders():
+    return jsonify(store.get_orders())
 
 
 if __name__ == "__main__":

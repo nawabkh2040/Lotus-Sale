@@ -797,3 +797,185 @@
     margin-bottom: 0.5rem;
     line-height: 1.4;
 }
+
+/* ============================================================= */
+/* Comparison, recommendation & order cards + UI polish          */
+/* ============================================================= */
+
+/* --- Product comparison --- */
+.comparison-card {
+    margin: 10px 0;
+}
+.cmp-wrap {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.cmp-head {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.cmp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.cmp-table th,
+.cmp-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+}
+.cmp-table thead th {
+    background: #f3fbfa;
+    color: var(--text-dark);
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+.cmp-table tbody tr:nth-child(even) { background: #fafcfc; }
+.cmp-feature { color: var(--text-light); font-weight: 600; white-space: nowrap; }
+.cmp-diffs {
+    margin: 10px 14px;
+    padding-left: 18px;
+    font-size: 0.82rem;
+    color: var(--text-dark);
+}
+.cmp-diffs li { margin-bottom: 4px; }
+.cmp-verdict {
+    margin: 0 14px 14px;
+    padding: 9px 12px;
+    background: #eafff6;
+    border-left: 3px solid #28a745;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: #1a7d47;
+    display: flex;
+    gap: 7px;
+    align-items: flex-start;
+}
+
+/* --- Recommendation header --- */
+.reco-header {
+    margin: 12px 0 4px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.reco-header::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--primary-color), transparent);
+}
+
+/* --- Order tracking card --- */
+.order-card { margin: 10px 0; }
+.order-wrap {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+}
+.order-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-dark);
+}
+.order-status {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+.order-product {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+    margin: 8px 0 6px;
+    font-weight: 500;
+}
+.order-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.76rem;
+    color: var(--text-light);
+    margin-bottom: 14px;
+}
+.order-meta span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Timeline */
+.order-timeline {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+}
+.order-timeline::before {
+    content: "";
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    height: 2px;
+    background: var(--border-color);
+    z-index: 0;
+}
+.order-step {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    text-align: center;
+}
+.order-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #adb5bd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    border: 2px solid #fff;
+}
+.order-step.done .order-dot { background: #28a745; color: #fff; }
+.order-step.current .order-dot {
+    background: var(--primary-color);
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(32, 178, 170, 0.2);
+}
+.order-step-label {
+    font-size: 0.64rem;
+    color: var(--text-light);
+    margin-top: 6px;
+    line-height: 1.2;
+}
+.order-step.current .order-step-label,
+.order-step.done .order-step-label { color: var(--text-dark); font-weight: 600; }
+.order-step-label span {
+    display: block;
+    font-size: 0.58rem;
+    color: var(--text-light);
+    font-weight: 400;
+    margin-top: 2px;
+}

@@ -206,12 +206,30 @@ from tools.get_nearby_store import get_near_store
 from tools.Product_details import get_filtered_product_details_tool
 # Import the terms & conditions search tool
 from tools.search_terms_conditions import search_terms_conditions
-    
+# Compare, recommend and order tools (backed by the local catalog + SQLite store)
+from tools.compare_products import compare_products_tool
+from tools.recommend_products import recommend_products_tool
+from tools.order_tools import place_order_tool, track_order_tool, set_current_session
+
+# SQLite persistence for chat logs, sessions and orders
+import store
+store.init_db()
+store.seed_orders()
+
 # from langchain_tavily import TavilySearch
 
 # tavily_tool = TavilySearch(max_results=2,tavily_api_key=tavily_api_key)
 
-tools = [search_products, get_near_store, get_filtered_product_details_tool, search_terms_conditions]
+tools = [
+    search_products,
+    get_near_store,
+    get_filtered_product_details_tool,
+    search_terms_conditions,
+    compare_products_tool,
+    recommend_products_tool,
+    place_order_tool,
+    track_order_tool,
+]
 
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -229,6 +247,9 @@ You MUST respond with EXACTLY this JSON structure - NO nested JSON strings, NO e
   "product_details": {product object if get_filtered_product_details_tool was used},
   "stores": [array of store objects if get_near_store was used],
   "policy_info": {policy object if search_terms_conditions was used},
+  "comparison": [comparison object if compare_products was used],
+  "recommendations": [array of product objects if recommend_products was used],
+  "order": {order object if place_order or track_order was used},
   "end": "follow-up question to continue conversation"
 }
 
@@ -244,7 +265,22 @@ TOOL USAGE RULES:
    - Terms and conditions ("terms", "conditions", "policy")
    - Cancellation policy ("cancel", "cancellation")
    - Shipping/delivery terms ("shipping policy", "delivery terms")
-5. DON'T use tools when discussing general product info that doesn't need specific details
+5. Use compare_products when the user wants to COMPARE two products ("compare", "vs",
+   "difference between", "which is better"). Extract BOTH product_ids from the
+   previous search results and pass them as a list. Put the tool result in the
+   "comparison" field (as a one-item array) and write a short conversational summary
+   in "answer".
+6. Use recommend_products when the user asks for SUGGESTIONS or ALTERNATIVES
+   ("recommend", "suggest", "what else", "alternatives", "something similar",
+   "best phone under 20000"). Pass a category and/or budget, or based_on_product_id.
+   Put the returned list in the "recommendations" field.
+7. Use place_order when the user wants to BUY/ORDER a specific product ("order this",
+   "buy", "place an order", "I want to purchase"). Extract the product_id. Put the
+   returned order object in the "order" field and confirm warmly in "answer".
+8. Use track_order when the user wants the STATUS of an order ("track my order",
+   "where is my order", "order status") and gives an order id like LOTUS1001. Put
+   the returned order object in the "order" field.
+9. DON'T use tools when discussing general product info that doesn't need specific details
 
 IMPORTANT POLICY RESPONSE RULE:
 When using search_terms_conditions, DO NOT put raw policy sections in policy_info field. Instead:
@@ -315,6 +351,41 @@ When user asks "what is your return policy":
   "end": "Do you have a specific product you'd like to return or any other questions about our policies?"
 }
 
+When user asks "compare the last two phones" (extract both product_ids, e.g. 39422 and 39831):
+{
+  "answer": "Here's a side-by-side comparison of the two Redmi phones to help you decide.",
+  "products": [],
+  "product_details": {},
+  "stores": [],
+  "policy_info": {},
+  "comparison": [{"name": "Redmi 14C 5G", "vs_name": "Redmi A5 4G", "differences": ["Network: Redmi has 5G vs Redmi 4G", "Storage: 64GB vs 128GB"], "spec_table": [{"feature": "Price", "a": "₹9,499", "b": "₹7,499"}], "verdict": "..."}],
+  "end": "Would you like to order one of these?"
+}
+
+When user asks "recommend me a smartphone under 20000":
+{
+  "answer": "Based on your budget, here are some smartphones I'd recommend.",
+  "products": [],
+  "recommendations": [{"product_id": "38210", "product_name": "OnePlus Nord CE4 Lite 5G", "product_mrp": "₹19,999", "product_image": "...", "product_url": "...", "features": ["8GB RAM", "5500 mAh"]}],
+  "end": "Would you like to compare any of these or place an order?"
+}
+
+When user asks "place an order for product 39422":
+{
+  "answer": "Great choice! I've placed your order for the Redmi 14C 5G. You can track it anytime using the order id below.",
+  "products": [],
+  "order": {"order_id": "LOTUS54321", "product_name": "Redmi 14C 5G", "status": "Processing", "order_date": "16 Jul 2026", "expected_delivery": "20 Jul 2026", "timeline": [{"stage": "Order Placed", "state": "done"}, {"stage": "Processing", "state": "current"}]},
+  "end": "Is there anything else you'd like to add to your order?"
+}
+
+When user asks "track my order LOTUS1001":
+{
+  "answer": "Here's the latest status of your order.",
+  "products": [],
+  "order": {"order_id": "LOTUS1001", "product_name": "Samsung Galaxy A26 5G", "status": "Delivered", "order_date": "07 Jul 2026", "expected_delivery": "11 Jul 2026", "timeline": [...]},
+  "end": "Can I help you with anything else?"
+}
+
 CRITICAL POLICY_INFO RULES:
 ❌ NEVER nest policy tool results in additional objects like "search_terms_conditions_response"
 ❌ NEVER wrap policy data in extra fields
@@ -349,7 +420,7 @@ llm = ChatGoogleGenerativeAI(
 )
 
 # Bind tools to the model
-model = llm.bind_tools([search_products, get_near_store, get_filtered_product_details_tool, search_terms_conditions])
+model = llm.bind_tools(tools)
 
 # Test the model with tools
 # res=model.invoke(f"What is the weather in Berlin on {datetime.today()}?")
@@ -558,26 +629,33 @@ def display_user_stats(user_id: str):
     print(f"Active users: {len(redis_memory.get_active_users())}")
     print("-" * 30)
 
-def chat_with_agent(message: str, session_id: str = "default_session") -> str:
+def _run_agent(message: str, session_id: str = "default_session") -> str:
     """
     Chat with the Lotus Electronics agent for Flask integration.
-    
+
     Args:
         message: User's message
         session_id: Unique session identifier for conversation memory
-        
+
     Returns:
         JSON string response from the agent
     """
     try:
         # Use session_id as user_id for Redis memory
         user_id = session_id
-        
+
+        # Make the session available to order tools and log the user's message
+        set_current_session(session_id)
+        try:
+            store.log_message(session_id, "user", message)
+        except Exception as log_err:
+            print(f"⚠️  Failed to log user message: {log_err}")
+
         # Check Redis connection health
         redis_available = hasattr(redis_memory, 'test_connection') and redis_memory.test_connection()
         if not redis_available:
             print("⚠️  Redis not available - running without conversation memory")
-        
+
         # Create user message
         from langchain_core.messages import HumanMessage
         user_msg = HumanMessage(content=message)
@@ -809,6 +887,28 @@ def chat_with_agent(message: str, session_id: str = "default_session") -> str:
             "end": "Is there anything else I can help you with from our electronics collection?"
         }
         return json.dumps(error_response, ensure_ascii=False, indent=2)
+
+
+def chat_with_agent(message: str, session_id: str = "default_session") -> str:
+    """Public entry point: run the agent and persist the assistant reply.
+
+    Wraps `_run_agent` so every turn's assistant answer is logged to SQLite for
+    the admin portal. Logging failures never affect the returned response.
+    """
+    response = _run_agent(message, session_id)
+    try:
+        answer_text = response
+        try:
+            parsed = json.loads(response)
+            if isinstance(parsed, dict) and parsed.get("answer"):
+                answer_text = parsed["answer"]
+        except Exception:
+            pass
+        store.log_message(session_id, "assistant", answer_text)
+    except Exception as log_err:
+        print(f"⚠️  Failed to log assistant message: {log_err}")
+    return response
+
 
 # Main execution - only run when script is executed directly
 if __name__ == "__main__":

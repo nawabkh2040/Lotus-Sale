@@ -4,7 +4,8 @@ class ChatBot {
         this.isTyping = false;
         this.messageCount = 0;
         this.apiKey = 'nawabkhan';
-        this.baseUrl = `${window.location.protocol}//${window.location.hostname}:8001`;
+        // Use the same origin the page was served from so it works on any port
+        this.baseUrl = window.location.origin;
         this.sessionId = this.generateSessionId();
         this.awaitingPhone = false;
         this.awaitingOTP = false;
@@ -423,6 +424,85 @@ class ChatBot {
         this.scrollToBottom();
     }
 
+    addComparisonCard(item) {
+        if (!item || (item.error && !item.spec_table)) {
+            if (item && item.error) this.addMessage(item.error, 'bot');
+            return;
+        }
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'comparison-card fade-in';
+
+        const rows = Array.isArray(item.spec_table) ? item.spec_table : [];
+        const rowsHtml = rows.map(r => `
+            <tr>
+                <td class="cmp-feature">${r.feature}</td>
+                <td>${r.a}</td>
+                <td>${r.b}</td>
+            </tr>`).join('');
+
+        const diffsHtml = Array.isArray(item.differences) && item.differences.length
+            ? `<ul class="cmp-diffs">${item.differences.map(d => `<li>${d}</li>`).join('')}</ul>`
+            : '';
+
+        cardDiv.innerHTML = `
+            <div class="cmp-wrap">
+                <div class="cmp-head"><i class="fas fa-code-compare"></i> Product Comparison</div>
+                <table class="cmp-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>${item.name || 'Product A'}</th>
+                            <th>${item.vs_name || 'Product B'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+                ${diffsHtml}
+                ${item.verdict ? `<div class="cmp-verdict"><i class="fas fa-circle-check"></i> ${item.verdict}</div>` : ''}
+            </div>`;
+
+        this.chatMessages.appendChild(cardDiv);
+        this.scrollToBottom();
+    }
+
+    addRecommendationHeader() {
+        const div = document.createElement('div');
+        div.className = 'reco-header fade-in';
+        div.innerHTML = `<i class="fas fa-wand-magic-sparkles"></i> Recommended for you`;
+        this.chatMessages.appendChild(div);
+        this.scrollToBottom();
+    }
+
+    addOrderCard(order) {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'order-card fade-in';
+
+        const timeline = Array.isArray(order.timeline) ? order.timeline : [];
+        const stepsHtml = timeline.map(t => `
+            <div class="order-step ${t.state}">
+                <div class="order-dot"><i class="fas fa-${t.state === 'done' ? 'check' : (t.state === 'current' ? 'location-dot' : 'circle')}"></i></div>
+                <div class="order-step-label">${t.stage}${t.date ? `<span>${t.date}</span>` : ''}</div>
+            </div>`).join('');
+
+        cardDiv.innerHTML = `
+            <div class="order-wrap">
+                <div class="order-head">
+                    <span><i class="fas fa-box"></i> Order ${order.order_id}</span>
+                    <span class="order-status">${order.status || ''}</span>
+                </div>
+                <div class="order-product">${order.product_name || ''}</div>
+                <div class="order-meta">
+                    ${order.amount ? `<span><i class="fas fa-tag"></i> ${order.amount}</span>` : ''}
+                    ${order.order_date ? `<span><i class="fas fa-calendar"></i> ${order.order_date}</span>` : ''}
+                    ${order.expected_delivery ? `<span><i class="fas fa-truck"></i> Est. ${order.expected_delivery}</span>` : ''}
+                </div>
+                <div class="order-timeline">${stepsHtml}</div>
+            </div>`;
+
+        this.chatMessages.appendChild(cardDiv);
+        this.scrollToBottom();
+    }
+
     // addProductCard(product) {
     //     const card = document.createElement('div');
     //     card.className = 'product-card fade-in';
@@ -455,6 +535,8 @@ class ChatBot {
         const stores = responseData.stores;
         const policyInfo = responseData.policy_info;
         const comparison = responseData.comparison;
+        const recommendations = responseData.recommendations;
+        const order = responseData.order;
         const end = responseData.end;
 
         // If stores are present, clean up the answer to avoid duplication
@@ -518,22 +600,14 @@ class ChatBot {
             }
         }
         if (comparison && Array.isArray(comparison)) {
-            comparison.forEach(item => {
-                let compMsg = `
-                <div class="max-w-xl mx-auto p-2">
-                  <div class="bg-white shadow rounded-xl p-4 border border-gray-200">
-                    <div class="font-bold mb-2 text-gray-800">
-                      Comparison: <span class="text-blue-700">${item.name}</span> <span class="text-gray-500">vs</span> <span class="text-green-700">${item.vs_name}</span>
-                    </div>
-                    <ul class="text-sm text-gray-700 list-disc ml-5 space-y-1 mb-2">
-                      ${item.differences.map(diff => `<li>${diff}</li>`).join('')}
-                    </ul>
-                    <div class="text-xs text-gray-500 mt-2"><em>Would you like to purchase one or need further details?</em></div>
-                  </div>
-                </div>
-                `;
-                this.addMessage(compMsg, 'bot');
-            });
+            comparison.forEach(item => this.addComparisonCard(item));
+        }
+        if (recommendations && Array.isArray(recommendations) && recommendations.length > 0) {
+            this.addRecommendationHeader();
+            recommendations.forEach(product => this.addProductCard(product));
+        }
+        if (order && typeof order === 'object' && order.order_id) {
+            this.addOrderCard(order);
         }
         if (end) this.addMessage(end, 'bot');
     }
@@ -763,6 +837,8 @@ class ChatBot {
             homeappliance: "I'm interested in home appliances. What brands and models do you have?",
             kitchenappliance: "I'm looking for kitchen appliances. What options are available?",
             ac: "I need an air conditioner. Can you show me your AC collection?",
+            recommend: "Can you recommend a good smartphone under 20000?",
+            trackorder: "I'd like to track my order LOTUS1001.",
             storelocator: "I want to find a Lotus Electronics store near me. Can you help?"
         };
 
