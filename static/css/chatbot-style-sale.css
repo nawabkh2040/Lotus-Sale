@@ -1,7 +1,7 @@
     /* Custom Properties */
     :root {
-        --primary-color: #20b2aa;
-        --primary-dark: #1a9b94;
+        --primary-color: #4285f4;
+        --primary-dark: #1a73e8;
         --secondary-color: #f8f9fa;
         --text-dark: #2c3e50;
         --text-light: #6c757d;
@@ -48,7 +48,7 @@
 
     .chat-toggle:hover {
         transform: translateY(-3px);
-        box-shadow: 0 25px 70px rgba(32, 178, 170, 0.3);
+        box-shadow: 0 25px 70px rgba(66, 133, 244, 0.3);
         background: var(--primary-dark);
     }
 
@@ -190,7 +190,7 @@
         background: var(--primary-color);
         color: white;
         transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(32, 178, 170, 0.2);
+        box-shadow: 0 5px 15px rgba(66, 133, 244, 0.2);
     }
 
     .quick-action-btn i {
@@ -658,13 +658,13 @@
 
 .product-detail-card {
     border: 2px solid var(--primary-color) !important;
-    box-shadow: 0 4px 12px rgba(32, 178, 170, 0.15);
+    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.15);
     transition: var(--transition);
 }
 
 .product-detail-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(32, 178, 170, 0.2);
+    box-shadow: 0 8px 24px rgba(66, 133, 244, 0.2);
 }
 
 .product-detail-card .card-header {
@@ -962,7 +962,7 @@
 .order-step.current .order-dot {
     background: var(--primary-color);
     color: #fff;
-    box-shadow: 0 0 0 4px rgba(32, 178, 170, 0.2);
+    box-shadow: 0 0 0 4px rgba(66, 133, 244, 0.2);
 }
 .order-step-label {
     font-size: 0.64rem;
@@ -981,7 +981,7 @@
 }
 
 /* ============================================================= */
-/* FULL-SCREEN LAYOUT (overrides the floating-widget styles)     */
+/* FLOATING CARD LAYOUT — chat card popping out of a gradient    */
 /* ============================================================= */
 html, body {
     height: 100%;
@@ -989,8 +989,20 @@ html, body {
 body {
     padding: 0 !important;
     margin: 0;
+    min-height: 100vh;
     overflow: hidden;
-    background: #eef1f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Attractive animated gradient backdrop */
+    background: linear-gradient(135deg, #4285f4 0%, #6a5cff 32%, #a24ff0 66%, #4285f4 100%);
+    background-size: 300% 300%;
+    animation: bgShift 20s ease infinite;
+}
+@keyframes bgShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 
 /* Hide the widget chrome that only makes sense in floating mode */
@@ -1000,94 +1012,85 @@ body {
     display: none !important;
 }
 
-/* The chat now fills the whole viewport */
+/* The chat is a centered card that "pops" off the gradient */
 .chat-container {
-    position: fixed;
-    inset: 0;
-    top: 0; right: 0; bottom: 0; left: 0;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
+    position: relative;
+    inset: auto;
+    top: auto; right: auto; bottom: auto; left: auto;
+    width: min(1060px, 94vw);
+    height: min(900px, 92vh);
     max-width: none;
-    border-radius: 0;
-    transform: none !important;
-    opacity: 1 !important;
-    box-shadow: none;
+    border-radius: 26px;
     background: #ffffff;
+    overflow: hidden;
+    opacity: 1 !important;
+    transform: none !important;
+    box-shadow:
+        0 30px 80px rgba(24, 39, 75, 0.35),
+        0 12px 30px rgba(24, 39, 75, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+    animation: cardPop 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .chat-container.active {
     transform: none !important;
     opacity: 1 !important;
 }
+@keyframes cardPop {
+    from { opacity: 0; transform: translateY(24px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
 
-/* Top app-bar spanning full width, title left-aligned */
+/* Header: title left-aligned, corners clipped by the card radius */
 .chat-header {
     border-radius: 0;
-    padding: 16px 28px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    padding: 18px 26px;
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.10);
     justify-content: flex-start;
     z-index: 5;
 }
 .chat-header h6 { font-size: 1.1rem; }
 .chat-header .avatar { width: 44px; height: 44px; font-size: 20px; }
 
-/* Center every message / card in a readable column on wide screens */
+/* Messages fill the card comfortably */
 .chat-messages {
-    padding: 24px 20px 8px;
-    background: #f6f8fb;
+    padding: 22px 26px 10px;
 }
-.chat-messages > * {
-    max-width: 860px;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    width: 100%;
-}
-.message-content { max-width: 68%; }
+.message-content { max-width: 74%; }
 .message-bubble p { font-size: 15px; }
 
-/* Quick actions: centered, roomier grid */
-.quick-actions {
-    padding: 18px 20px;
-}
-.quick-actions .row {
-    max-width: 860px;
-    margin-left: auto;
-    margin-right: auto;
-}
+.quick-actions { padding: 18px 26px; }
 .quick-action-btn span { font-size: 12px; }
 
-/* Typing indicator aligns with the centered column */
-.typing-indicator {
-    max-width: 860px;
-    margin: 0 auto;
-    width: 100%;
-    padding: 0 20px 10px;
-}
+.typing-indicator { padding: 0 26px 10px; }
 
-/* Input bar pinned to the bottom, centered */
 .chat-input {
-    padding: 14px 20px;
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.05);
+    padding: 16px 26px;
+    box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.05);
     z-index: 5;
 }
-.chat-input .input-group {
-    max-width: 860px;
-    margin: 0 auto;
-    border: 1px solid var(--border-color);
-}
+.chat-input .input-group { border: 1px solid var(--border-color); }
 .chat-input .form-control { font-size: 15px; padding: 14px 18px; }
-.chat-input .btn-primary { padding: 12px 22px; }
 
-.chat-footer { padding: 8px 20px; }
+.chat-footer { padding: 9px 26px; }
 
-/* Larger product/store cards feel better in full screen */
 .chat-messages .card { font-size: 0.95rem; }
 
+/* On small screens the card grows to (nearly) full bleed */
 @media (max-width: 768px) {
-    .message-content { max-width: 82%; }
+    body { padding: 0 !important; }
+    .chat-container {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .message-content { max-width: 84%; }
     .chat-header { padding: 14px 16px; }
-    .chat-messages { padding: 16px 12px 6px; }
-    .chat-input { padding: 12px; }
+    .chat-messages { padding: 16px 14px 6px; }
+    .quick-actions { padding: 16px 14px; }
+    .chat-input { padding: 12px 14px; }
+    .typing-indicator { padding: 0 14px 10px; }
 }
 
 /* ============================================================= */
@@ -1097,13 +1100,13 @@ body {
 /* Softer, layered page background behind the message column */
 .chat-messages {
     background:
-        radial-gradient(1200px 400px at 50% -8%, rgba(32, 178, 170, 0.08), transparent 70%),
+        radial-gradient(1200px 400px at 50% -8%, rgba(66, 133, 244, 0.08), transparent 70%),
         #f5f8fb;
 }
 
 /* --- Header: richer gradient, glassy depth, brand mark --- */
 .chat-header {
-    background: linear-gradient(120deg, #17a89f 0%, #20b2aa 45%, #35c9c0 100%);
+    background: linear-gradient(120deg, #1a73e8 0%, #4285f4 45%, #669df6 100%);
     position: relative;
     overflow: hidden;
 }
@@ -1140,7 +1143,7 @@ body {
 .user-message .message-bubble {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     border: none;
-    box-shadow: 0 4px 14px rgba(32, 178, 170, 0.28);
+    box-shadow: 0 4px 14px rgba(66, 133, 244, 0.28);
 }
 .message-time { font-size: 10.5px; opacity: 0.8; }
 
@@ -1162,7 +1165,7 @@ body {
     width: 40px; height: 40px;
     display: flex; align-items: center; justify-content: center;
     border-radius: 11px;
-    background: rgba(32, 178, 170, 0.12);
+    background: rgba(66, 133, 244, 0.12);
     color: var(--primary-color);
     font-size: 17px;
     margin-bottom: 2px;
@@ -1174,7 +1177,7 @@ body {
     background: #fff;
     color: var(--text-dark);
     transform: translateY(-3px);
-    box-shadow: 0 10px 22px rgba(32, 178, 170, 0.18);
+    box-shadow: 0 10px 22px rgba(66, 133, 244, 0.18);
 }
 .quick-action-btn:hover i { background: var(--primary-color); color: #fff; transform: scale(1.05); }
 .quick-action-btn:hover span { color: var(--primary-dark); }
@@ -1201,7 +1204,7 @@ body {
     border-radius: 9px;
     font-weight: 600;
     padding: 6px 14px;
-    background: rgba(32, 178, 170, 0.08);
+    background: rgba(66, 133, 244, 0.08);
     border-color: transparent;
     color: var(--primary-dark);
 }
@@ -1227,7 +1230,7 @@ body {
 }
 .chat-input .input-group:focus-within {
     border-color: var(--primary-color);
-    box-shadow: 0 6px 22px rgba(32, 178, 170, 0.18);
+    box-shadow: 0 6px 22px rgba(66, 133, 244, 0.18);
 }
 .chat-input .form-control { background: transparent; }
 .chat-input .btn-primary {
@@ -1236,7 +1239,7 @@ body {
     display: flex; align-items: center; justify-content: center;
     padding: 0;
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    box-shadow: 0 4px 12px rgba(32, 178, 170, 0.35);
+    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.35);
     flex-shrink: 0;
 }
 .chat-input .btn-primary:hover { transform: scale(1.06); }
@@ -1250,12 +1253,12 @@ body {
 /* --- Refined scrollbar --- */
 .chat-messages::-webkit-scrollbar { width: 8px; }
 .chat-messages::-webkit-scrollbar-thumb {
-    background: rgba(32, 178, 170, 0.35);
+    background: rgba(66, 133, 244, 0.35);
     border-radius: 10px;
     border: 2px solid transparent;
     background-clip: padding-box;
 }
-.chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(32, 178, 170, 0.6); background-clip: padding-box; }
+.chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(66, 133, 244, 0.6); background-clip: padding-box; }
 .chat-messages::-webkit-scrollbar-track { background: transparent; }
 
 /* --- Comparison / order card shadow harmonization --- */
